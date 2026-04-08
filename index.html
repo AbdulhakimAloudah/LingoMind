@@ -79,10 +79,6 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 .sdot{width:8px;height:8px;border-radius:50%;background:var(--border);display:inline-block}
 .sdot.on{background:var(--green)}
 .sdot.lis{background:#E24B4A;animation:pulse 1s infinite}
-.ldot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);animation:lp .8s infinite;margin:0 2px}
-.ldot:nth-child(2){animation-delay:.2s}
-.ldot:nth-child(3){animation-delay:.4s}
-@keyframes lp{0%,100%{opacity:.25}50%{opacity:1}}
 .bottom-tabs{background:var(--bg2);border-top:1px solid var(--border);display:flex;padding-bottom:max(0px,env(safe-area-inset-bottom));flex-shrink:0}
 .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 0;border:none;background:transparent;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;min-height:56px}
 .tab-btn.active{color:var(--green)}
@@ -257,15 +253,15 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 
 </div>
 <script>
-const GK='AIzaSyDrJGScg0_hbie0nMXLvnXeL-d3AZOrnic';
-let sessions=JSON.parse(localStorage.getItem('lm4_sess')||'[]');
+const MODEL='gemini-2.5-flash-preview-04-17';
+let sessions=JSON.parse(localStorage.getItem('lm5_sess')||'[]');
 let cur=null,rec=null,isRec=false,silT=null,sCount=0,chatH=[],sentences=[],isProcessing=false;
 
 function gotoPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pg-'+id).classList.add('active');
   if(id==='home')renderList();
-  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm4_gk')||'';
+  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm5_gk')||'';
 }
 
 function renderList(){
@@ -306,10 +302,10 @@ function openSess(id){
 }
 
 function exitSess(){if(isRec)stopRec();saveCur();gotoPage('home');}
-function save(){localStorage.setItem('lm4_sess',JSON.stringify(sessions));}
+function save(){localStorage.setItem('lm5_sess',JSON.stringify(sessions));}
 function saveCur(){if(!cur)return;cur.sentences=sentences;cur.chatH=chatH;const i=sessions.findIndex(s=>s.id===cur.id);if(i>=0)sessions[i]=cur;save();}
-function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm4_gk',v);gotoPage('home');}
-function getGK(){return localStorage.getItem('lm4_gk')||GK;}
+function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm5_gk',v);alert('تم الحفظ ✓');gotoPage('home');}
+function getGK(){return localStorage.getItem('lm5_gk')||'';}
 function clearAll(){if(confirm('حذف جميع البيانات؟')){localStorage.clear();sessions=[];gotoPage('home');}}
 
 function sysProm(){
@@ -322,14 +318,15 @@ function sysProm(){
 function sysPromChat(){
   const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
   const context=sentences.slice(-15).map(s=>'['+s.id+'] '+s.orig).join('\n');
-  return 'أنت مساعد ذكي.'+ct+'\n\nنص الجلسة:\n'+context+'\n\nأجب على أسئلة المستخدم من نص الجلسة فقط. إذا كان السؤال خارجها قل: هذا خارج نطاق جلستك. ردودك بالعربية. إذا أجبت من جملة اذكر رقمها هكذا [ref:رقم]';
+  return 'أنت مساعد ذكي.'+ct+'\n\nنص الجلسة:\n'+context+'\n\nأجب من نص الجلسة فقط. إذا كان السؤال خارجها قل: هذا خارج نطاق جلستك. ردودك بالعربية. إذا أجبت من جملة اذكر رقمها [ref:رقم]';
 }
 
 function langName(c){const m={ar:'العربية',en:'الإنجليزية',zh:'الصينية',fr:'الفرنسية',de:'الألمانية',tr:'التركية',ru:'الروسية'};return m[c]||c;}
 
 async function callGemini(prompt,maxTokens){
   const key=getGK();
-  const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
+  if(!key){addMsg('يرجى إضافة مفتاح جيميناي في الإعدادات','bot');return '';}
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+MODEL+':generateContent?key='+key;
   const res=await fetch(url,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -338,17 +335,15 @@ async function callGemini(prompt,maxTokens){
       generationConfig:{temperature:0.2,maxOutputTokens:maxTokens||300}
     })
   });
-  if(!res.ok){
-    const err=await res.json().catch(()=>({}));
-    throw new Error(err.error?.message||res.status);
-  }
+  if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||res.status);}
   const data=await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
 
 async function callGeminiChat(msg){
   const key=getGK();
-  const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
+  if(!key){addMsg('يرجى إضافة مفتاح جيميناي في الإعدادات','bot');return '';}
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+MODEL+':generateContent?key='+key;
   const hist=chatH.slice(-4).map(m=>({role:m.r==='u'?'user':'model',parts:[{text:m.t}]}));
   const messages=[
     {role:'user',parts:[{text:sysPromChat()}]},
@@ -361,10 +356,7 @@ async function callGeminiChat(msg){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:messages,generationConfig:{temperature:0.3,maxOutputTokens:400}})
   });
-  if(!res.ok){
-    const err=await res.json().catch(()=>({}));
-    throw new Error(err.error?.message||res.status);
-  }
+  if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||res.status);}
   const data=await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
@@ -413,6 +405,7 @@ async function procText(text){
   updCount();setStatus('proc');
   try{
     const fullText=await callGemini(sysProm()+'\n\nالنص: "'+text+'"',300);
+    if(!fullText){sentEl.textContent=text;isProcessing=false;setStatus('lis');return;}
     const trM=fullText.match(/TRANSLATION:\s*(.+?)(?:\nALERT:|$)/s);
     const alM=fullText.match(/ALERT:\s*(.+?)(?:\nURGENT:|$)/s);
     const ugM=fullText.match(/URGENT:\s*(true|false)/);
@@ -442,23 +435,18 @@ async function doChat(){
   if(window.innerWidth<700)switchTab('ai');
   try{
     const ans=await callGeminiChat(msg);
+    if(!ans){isProcessing=false;setStatus(isRec?'lis':'ready');return;}
     const refMatch=ans.match(/\[ref:(\d+)\]/);
     if(refMatch)hlSent(parseInt(refMatch[1]));
     const clean=ans.replace(/\[ref:\d+\]/g,'').trim();
     addMsg(clean,'bot');
     chatH.push({r:'a',t:clean});
     saveCur();
-  }catch(e){
-    addMsg('خطأ: '+e.message,'bot');
-  }
+  }catch(e){addMsg('خطأ: '+e.message,'bot');}
   isProcessing=false;setStatus(isRec?'lis':'ready');
 }
 
-function qSend(msg){
-  if(isProcessing)return;
-  document.getElementById('chat-inp').value=msg;
-  doChat();
-}
+function qSend(msg){if(isProcessing)return;document.getElementById('chat-inp').value=msg;doChat();}
 
 function switchTab(tab){
   const tr=document.getElementById('mob-trans'),ai=document.getElementById('mob-ai');
@@ -470,6 +458,7 @@ function switchTab(tab){
 function toggleMic(){if(isRec)stopRec();else startRec();}
 
 function startRec(){
+  if(!getGK()){alert('يرجى إضافة مفتاح جيميناي في الإعدادات أولاً');gotoPage('settings');return;}
   if(!('webkitSpeechRecognition'in window||'SpeechRecognition'in window)){alert('استخدم Chrome للتعرف على الصوت');return;}
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   rec=new SR();rec.lang=cur.src||'zh-CN';rec.continuous=true;rec.interimResults=true;
