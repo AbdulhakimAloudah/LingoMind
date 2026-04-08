@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>LingoMind</title>
 <style>
 :root{
@@ -55,7 +55,6 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 .panel-hdr-badge{font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text3)}
 .trans-area{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
 .sentence{padding:10px 12px;margin-bottom:6px;border-radius:10px;font-size:15px;line-height:1.7;color:#d8d8d8;border-right:3px solid transparent;transition:background .3s,border-color .3s}
-.sentence.streaming{border-right-color:#444;color:#aaa}
 .sentence.hl{background:var(--green-dim);border-right-color:var(--green);color:#fff}
 .ai-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
 .alert-bub{background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:12px;padding:10px 14px;font-size:13px;color:var(--amber);line-height:1.6}
@@ -258,389 +257,245 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 
 </div>
 <script>
-const GK = 'AIzaSyDrJGScg0_hbie0nMXLvnXeL-d3AZOrnic';
-let sessions = JSON.parse(localStorage.getItem('lm3_sess') || '[]');
-let cur = null, rec = null, isRec = false, silT = null;
-let sCount = 0, chatH = [], sentences = [];
-let isProcessing = false;
+const GK='AIzaSyDrJGScg0_hbie0nMXLvnXeL-d3AZOrnic';
+let sessions=JSON.parse(localStorage.getItem('lm4_sess')||'[]');
+let cur=null,rec=null,isRec=false,silT=null,sCount=0,chatH=[],sentences=[],isProcessing=false;
 
-function gotoPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('pg-' + id).classList.add('active');
-  if (id === 'home') renderList();
-  if (id === 'settings') document.getElementById('g-key').value = localStorage.getItem('lm3_gk') || '';
+function gotoPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pg-'+id).classList.add('active');
+  if(id==='home')renderList();
+  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm4_gk')||'';
 }
 
-function renderList() {
-  const el = document.getElementById('sess-list');
-  el.querySelectorAll('.session-card').forEach(e => e.remove());
-  const empty = document.getElementById('empty-msg');
-  if (!sessions.length) { empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  [...sessions].reverse().forEach(s => {
-    const d = document.createElement('div');
-    d.className = 'session-card';
-    d.innerHTML = '<div class="s-icon">🎙</div><div class="s-info"><div class="s-name">' + s.name + '</div><div class="s-date">' + new Date(s.ts).toLocaleDateString('ar') + '</div></div><button class="s-del" onclick="delSess(event,\'' + s.id + '\')">✕</button>';
-    d.onclick = () => openSess(s.id);
+function renderList(){
+  const el=document.getElementById('sess-list');
+  el.querySelectorAll('.session-card').forEach(e=>e.remove());
+  const empty=document.getElementById('empty-msg');
+  if(!sessions.length){empty.style.display='block';return;}
+  empty.style.display='none';
+  [...sessions].reverse().forEach(s=>{
+    const d=document.createElement('div');
+    d.className='session-card';
+    d.innerHTML='<div class="s-icon">🎙</div><div class="s-info"><div class="s-name">'+s.name+'</div><div class="s-date">'+new Date(s.ts).toLocaleDateString('ar')+'</div></div><button class="s-del" onclick="delSess(event,\''+s.id+'\')">✕</button>';
+    d.onclick=()=>openSess(s.id);
     el.appendChild(d);
   });
 }
 
-function delSess(e, id) {
-  e.stopPropagation();
-  sessions = sessions.filter(s => s.id !== id);
-  save(); renderList();
+function delSess(e,id){e.stopPropagation();sessions=sessions.filter(s=>s.id!==id);save();renderList();}
+function swapL(){const a=document.getElementById('f-src'),b=document.getElementById('f-tgt');const t=a.value;a.value=b.value;b.value=t;}
+function getAlerts(){const a=[];if(document.getElementById('cb-price').checked)a.push('الأسعار والأرقام');if(document.getElementById('cb-date').checked)a.push('المواعيد والتواريخ');if(document.getElementById('cb-prod').checked)a.push('المنتجات والمواصفات');if(document.getElementById('cb-task').checked)a.push('الطلبات والمهام');return a;}
+
+function startSess(){
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){alert('الرجاء كتابة اسم الجلسة');return;}
+  const s={id:'s'+Date.now(),name,ctx:document.getElementById('f-ctx').value.trim(),src:document.getElementById('f-src').value,tgt:document.getElementById('f-tgt').value,alerts:getAlerts(),extra:document.getElementById('f-extra').value.trim(),ts:Date.now(),sentences:[],chatH:[]};
+  sessions.push(s);save();openSess(s.id);
 }
 
-function swapL() {
-  const a = document.getElementById('f-src'), b = document.getElementById('f-tgt');
-  const t = a.value; a.value = b.value; b.value = t;
+function openSess(id){
+  cur=sessions.find(s=>s.id===id);if(!cur)return;
+  document.getElementById('sess-title').textContent=cur.name;
+  sCount=0;chatH=[...(cur.chatH||[])];sentences=[...(cur.sentences||[])];
+  document.getElementById('trans-area').innerHTML='';
+  document.getElementById('ai-area').innerHTML='';
+  sentences.forEach(s=>addLine(s.orig,s.tr,s.id,false));
+  (cur.chatH||[]).forEach(m=>{if(m.r==='u')addMsg(m.t,'user',false);else addMsg(m.t,'bot',false);});
+  sCount=sentences.length;updCount();switchTab('trans');gotoPage('session');
 }
 
-function getAlerts() {
-  const a = [];
-  if (document.getElementById('cb-price').checked) a.push('الأسعار والأرقام');
-  if (document.getElementById('cb-date').checked) a.push('المواعيد والتواريخ');
-  if (document.getElementById('cb-prod').checked) a.push('المنتجات والمواصفات');
-  if (document.getElementById('cb-task').checked) a.push('الطلبات والمهام');
-  return a;
+function exitSess(){if(isRec)stopRec();saveCur();gotoPage('home');}
+function save(){localStorage.setItem('lm4_sess',JSON.stringify(sessions));}
+function saveCur(){if(!cur)return;cur.sentences=sentences;cur.chatH=chatH;const i=sessions.findIndex(s=>s.id===cur.id);if(i>=0)sessions[i]=cur;save();}
+function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm4_gk',v);gotoPage('home');}
+function getGK(){return localStorage.getItem('lm4_gk')||GK;}
+function clearAll(){if(confirm('حذف جميع البيانات؟')){localStorage.clear();sessions=[];gotoPage('home');}}
+
+function sysProm(){
+  const al=cur.alerts.join('،');
+  const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
+  const ex=cur.extra?'\nتعليمات: '+cur.extra:'';
+  return 'أنت مترجم ذكي.'+ct+ex+'\nترجم النص التالي إلى '+langName(cur.tgt)+' ترجمة طبيعية سياقية.\nإذا وجدت ما يخص ('+al+') أضف تنبيهاً.\n\nأرجع هذا الشكل فقط:\nTRANSLATION: [الترجمة]\nALERT: [التنبيه أو NONE]\nURGENT: [true أو false]';
 }
 
-function startSess() {
-  const name = document.getElementById('f-name').value.trim();
-  if (!name) { alert('الرجاء كتابة اسم الجلسة'); return; }
-  const s = {
-    id: 's' + Date.now(), name,
-    ctx: document.getElementById('f-ctx').value.trim(),
-    src: document.getElementById('f-src').value,
-    tgt: document.getElementById('f-tgt').value,
-    alerts: getAlerts(),
-    extra: document.getElementById('f-extra').value.trim(),
-    ts: Date.now(), sentences: [], chatH: []
-  };
-  sessions.push(s); save(); openSess(s.id);
+function sysPromChat(){
+  const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
+  const context=sentences.slice(-15).map(s=>'['+s.id+'] '+s.orig).join('\n');
+  return 'أنت مساعد ذكي.'+ct+'\n\nنص الجلسة:\n'+context+'\n\nأجب على أسئلة المستخدم من نص الجلسة فقط. إذا كان السؤال خارجها قل: هذا خارج نطاق جلستك. ردودك بالعربية. إذا أجبت من جملة اذكر رقمها هكذا [ref:رقم]';
 }
 
-function openSess(id) {
-  cur = sessions.find(s => s.id === id);
-  if (!cur) return;
-  document.getElementById('sess-title').textContent = cur.name;
-  sCount = 0; chatH = [...(cur.chatH || [])]; sentences = [...(cur.sentences || [])];
-  document.getElementById('trans-area').innerHTML = '';
-  document.getElementById('ai-area').innerHTML = '';
-  sentences.forEach(s => addLine(s.orig, s.tr, s.id, false));
-  (cur.chatH || []).forEach(m => { if (m.r === 'u') addMsg(m.t, 'user', false); else addMsg(m.t, 'bot', false); });
-  sCount = sentences.length; updCount();
-  switchTab('trans'); gotoPage('session');
-}
+function langName(c){const m={ar:'العربية',en:'الإنجليزية',zh:'الصينية',fr:'الفرنسية',de:'الألمانية',tr:'التركية',ru:'الروسية'};return m[c]||c;}
 
-function exitSess() { if (isRec) stopRec(); saveCur(); gotoPage('home'); }
-function save() { localStorage.setItem('lm3_sess', JSON.stringify(sessions)); }
-function saveCur() {
-  if (!cur) return;
-  cur.sentences = sentences; cur.chatH = chatH;
-  const i = sessions.findIndex(s => s.id === cur.id);
-  if (i >= 0) sessions[i] = cur; save();
-}
-function saveSet() {
-  const v = document.getElementById('g-key').value.trim();
-  if (v) localStorage.setItem('lm3_gk', v);
-  gotoPage('home');
-}
-function getGK() { return localStorage.getItem('lm3_gk') || GK; }
-function clearAll() { if (confirm('حذف جميع البيانات؟')) { localStorage.clear(); sessions = []; gotoPage('home'); } }
-
-function sysProm() {
-  const al = cur.alerts.join('، ');
-  const ex = cur.extra ? '\nتعليمات إضافية: ' + cur.extra : '';
-  const ct = cur.ctx ? '\nالسياق: ' + cur.ctx : '';
-  return `أنت سكرتير شخصي متعدد اللغات.${ct}
-
-مهمتك: ترجم النص إلى ${langName(cur.tgt)} ترجمة سياقية طبيعية، ثم إذا وجدت ما يخص: ${al} أضف تنبيهاً.${ex}
-
-أرجع ردك بهذا الشكل الحرفي فقط بدون أي كلام إضافي:
-TRANSLATION: [النص المترجم]
-ALERT: [التنبيه أو NONE]
-URGENT: [true أو false]
-
-قواعد:
-- الترجمة سياقية وليست حرفية
-- إذا لا يوجد تنبيه اكتب ALERT: NONE
-- لا تضف أي نص خارج الصيغة أعلاه`;
-}
-
-function sysPromChat() {
-  const al = cur.alerts.join('، ');
-  const ct = cur.ctx ? '\nالسياق: ' + cur.ctx : '';
-  const context = sentences.length ? '\n\nنص الجلسة:\n' + sentences.map(s => '[' + s.id + '] ' + s.orig).join('\n') : '';
-  return `أنت سكرتير شخصي متعدد اللغات.${ct}${context}
-
-أجب على أسئلة المستخدم من نص الجلسة فقط. إذا كان السؤال خارج الجلسة قل: هذا السؤال خارج نطاق جلستك.
-ردودك دائماً بالعربية. إذا أجبت من جملة معينة اذكر رقمها هكذا: [ref:رقم]`;
-}
-
-async function callGeminiStream(text, sentEl) {
-  const key = getGK();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${key}`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: sysProm() + '\n\nالنص: "' + text + '"' }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 300 }
+async function callGemini(prompt,maxTokens){
+  const key=getGK();
+  const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
+  const res=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      contents:[{role:'user',parts:[{text:prompt}]}],
+      generationConfig:{temperature:0.2,maxOutputTokens:maxTokens||300}
     })
   });
-
-  if (!res.ok) throw new Error(res.status);
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let fullText = '';
-  let translationShown = false;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const data = line.slice(6).trim();
-      if (data === '[DONE]') continue;
-      try {
-        const parsed = JSON.parse(data);
-        const chunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        fullText += chunk;
-
-        if (!translationShown && fullText.includes('TRANSLATION:')) {
-          const trMatch = fullText.match(/TRANSLATION:\s*(.+?)(?:\n|ALERT:|$)/s);
-          if (trMatch && trMatch[1].trim()) {
-            sentEl.textContent = trMatch[1].trim();
-            sentEl.classList.remove('streaming');
-            translationShown = true;
-          }
-        }
-      } catch (e) {}
-    }
+  if(!res.ok){
+    const err=await res.json().catch(()=>({}));
+    throw new Error(err.error?.message||res.status);
   }
-
-  const trMatch = fullText.match(/TRANSLATION:\s*(.+?)(?:\nALERT:|$)/s);
-  const alMatch = fullText.match(/ALERT:\s*(.+?)(?:\nURGENT:|$)/s);
-  const urgMatch = fullText.match(/URGENT:\s*(true|false)/);
-
-  const translation = trMatch ? trMatch[1].trim() : text;
-  const alert = alMatch && alMatch[1].trim() !== 'NONE' ? alMatch[1].trim() : null;
-  const urgent = urgMatch ? urgMatch[1] === 'true' : false;
-
-  sentEl.textContent = translation;
-  sentEl.classList.remove('streaming');
-
-  return { translation, alert, urgent };
+  const data=await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
 
-async function callGeminiChat(msg) {
-  const key = getGK();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${key}`;
-
-  const hist = chatH.slice(-6).map(m => ({ role: m.r === 'u' ? 'user' : 'model', parts: [{ text: m.t }] }));
-  const messages = [
-    { role: 'user', parts: [{ text: sysPromChat() }] },
-    { role: 'model', parts: [{ text: 'فهمت، أنا جاهز.' }] },
+async function callGeminiChat(msg){
+  const key=getGK();
+  const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key;
+  const hist=chatH.slice(-4).map(m=>({role:m.r==='u'?'user':'model',parts:[{text:m.t}]}));
+  const messages=[
+    {role:'user',parts:[{text:sysPromChat()}]},
+    {role:'model',parts:[{text:'فهمت، أنا جاهز.'}]},
     ...hist,
-    { role: 'user', parts: [{ text: msg }] }
+    {role:'user',parts:[{text:msg}]}
   ];
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: messages, generationConfig: { temperature: 0.3, maxOutputTokens: 512 } })
+  const res=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:messages,generationConfig:{temperature:0.3,maxOutputTokens:400}})
   });
-
-  if (!res.ok) throw new Error(res.status);
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let fullText = '';
-  const botEl = addStreamingMsg();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const data = line.slice(6).trim();
-      if (data === '[DONE]') continue;
-      try {
-        const parsed = JSON.parse(data);
-        const chunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        fullText += chunk;
-        const clean = fullText.replace(/\[ref:\d+\]/g, '').trim();
-        botEl.textContent = clean || '...';
-        document.getElementById('ai-area').scrollTop = document.getElementById('ai-area').scrollHeight;
-      } catch (e) {}
-    }
+  if(!res.ok){
+    const err=await res.json().catch(()=>({}));
+    throw new Error(err.error?.message||res.status);
   }
-
-  const refMatch = fullText.match(/\[ref:(\d+)\]/);
-  if (refMatch) hlSent(parseInt(refMatch[1]));
-
-  const clean = fullText.replace(/\[ref:\d+\]/g, '').trim();
-  botEl.textContent = clean;
-  return clean;
+  const data=await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
 
-function langName(c) {
-  const m = { ar: 'العربية', en: 'الإنجليزية', zh: 'الصينية', fr: 'الفرنسية', de: 'الألمانية', tr: 'التركية', ru: 'الروسية' };
-  return m[c] || c;
+function addLine(orig,tr,id,scroll=true){
+  const el=document.getElementById('trans-area');
+  const d=document.createElement('div');
+  d.className='sentence';d.id='s'+id;d.textContent=tr||orig;
+  el.appendChild(d);if(scroll)el.scrollTop=el.scrollHeight;return d;
 }
 
-function addLine(orig, tr, id, scroll = true) {
-  const el = document.getElementById('trans-area');
-  const d = document.createElement('div');
-  d.className = 'sentence'; d.id = 's' + id; d.textContent = tr || orig;
-  el.appendChild(d);
-  if (scroll) el.scrollTop = el.scrollHeight;
-  return d;
+function hlSent(id){
+  document.querySelectorAll('.sentence').forEach(s=>s.classList.remove('hl'));
+  const el=document.getElementById('s'+id);
+  if(el){el.classList.add('hl');el.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>el.classList.remove('hl'),3000);}
 }
 
-function hlSent(id) {
-  document.querySelectorAll('.sentence').forEach(s => s.classList.remove('hl'));
-  const el = document.getElementById('s' + id);
-  if (el) {
-    el.classList.add('hl');
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(() => el.classList.remove('hl'), 3000);
-  }
+function addMsg(text,role,scroll=true){
+  const el=document.getElementById('ai-area');
+  const d=document.createElement('div');
+  d.className='ai-msg '+role;d.textContent=text;el.appendChild(d);
+  if(scroll)el.scrollTop=el.scrollHeight;return d;
 }
 
-function addMsg(text, role, scroll = true) {
-  const el = document.getElementById('ai-area');
-  const d = document.createElement('div');
-  d.className = 'ai-msg ' + role; d.textContent = text; el.appendChild(d);
-  if (scroll) el.scrollTop = el.scrollHeight;
-  return d;
+function addAlert(text,urgent=false){
+  const el=document.getElementById('ai-area');
+  const d=document.createElement('div');
+  d.className='alert-bub'+(urgent?' urgent':'');d.textContent='⚠ '+text;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
 }
 
-function addStreamingMsg() {
-  const el = document.getElementById('ai-area');
-  const d = document.createElement('div');
-  d.className = 'ai-msg bot'; d.textContent = '...'; el.appendChild(d);
-  el.scrollTop = el.scrollHeight;
-  return d;
+function updCount(){document.getElementById('sent-count').textContent=sCount+' جملة';}
+
+function setStatus(s){
+  const dot=document.getElementById('sdot'),txt=document.getElementById('stxt'),ai=document.getElementById('ai-dot');
+  if(s==='lis'){dot.className='sdot lis';txt.textContent='يستمع...';}
+  else if(s==='proc'){dot.className='sdot';txt.textContent='معالجة...';ai.className='sdot on';}
+  else{dot.className='sdot';txt.textContent='جاهز';ai.className='sdot';}
 }
 
-function addAlert(text, urgent = false) {
-  const el = document.getElementById('ai-area');
-  const d = document.createElement('div');
-  d.className = 'alert-bub' + (urgent ? ' urgent' : ''); d.textContent = '⚠ ' + text;
-  el.appendChild(d); el.scrollTop = el.scrollHeight;
-}
-
-function updCount() { document.getElementById('sent-count').textContent = sCount + ' جملة'; }
-
-function setStatus(s) {
-  const dot = document.getElementById('sdot'), txt = document.getElementById('stxt'), ai = document.getElementById('ai-dot');
-  if (s === 'lis') { dot.className = 'sdot lis'; txt.textContent = 'يستمع...'; }
-  else if (s === 'proc') { dot.className = 'sdot'; txt.textContent = 'معالجة...'; ai.className = 'sdot on'; }
-  else { dot.className = 'sdot'; txt.textContent = 'جاهز'; ai.className = 'sdot'; }
-}
-
-async function procText(text) {
-  if (!text || text.trim().length < 2 || isProcessing) return;
-  isProcessing = true;
-  const id = ++sCount;
-  const sentEl = addLine(text, '...', id);
-  sentEl.classList.add('streaming');
-  updCount(); setStatus('proc');
-
-  try {
-    const result = await callGeminiStream(text, sentEl);
-    sentences.push({ id, orig: text, tr: result.translation });
+async function procText(text){
+  if(!text||text.trim().length<2||isProcessing)return;
+  isProcessing=true;
+  const id=++sCount;
+  const sentEl=addLine(text,'...',id);
+  updCount();setStatus('proc');
+  try{
+    const fullText=await callGemini(sysProm()+'\n\nالنص: "'+text+'"',300);
+    const trM=fullText.match(/TRANSLATION:\s*(.+?)(?:\nALERT:|$)/s);
+    const alM=fullText.match(/ALERT:\s*(.+?)(?:\nURGENT:|$)/s);
+    const ugM=fullText.match(/URGENT:\s*(true|false)/);
+    const translation=trM?trM[1].trim():text;
+    const alert=alM&&alM[1].trim()!=='NONE'?alM[1].trim():null;
+    const urgent=ugM?ugM[1]==='true':false;
+    sentEl.textContent=translation;
+    sentences.push({id,orig:text,tr:translation});
     saveCur();
-    if (result.alert) {
-      addAlert(result.alert, result.urgent);
-      if (window.innerWidth < 700) switchTab('ai');
-    }
-  } catch (e) {
-    sentEl.textContent = text;
-    sentEl.classList.remove('streaming');
-    sentences.push({ id, orig: text, tr: text });
+    if(alert){addAlert(alert,urgent);if(window.innerWidth<700)switchTab('ai');}
+  }catch(e){
+    sentEl.textContent=text;
+    sentences.push({id,orig:text,tr:text});
+    addMsg('خطأ: '+e.message,'bot');
   }
-
-  isProcessing = false;
-  setStatus('lis');
+  isProcessing=false;setStatus('lis');
 }
 
-async function doChat() {
-  const inp = document.getElementById('chat-inp');
-  const msg = inp.value.trim(); if (!msg) return;
-  inp.value = '';
-  addMsg(msg, 'user');
-  chatH.push({ r: 'u', t: msg });
-  setStatus('proc');
-  if (window.innerWidth < 700) switchTab('ai');
-
-  try {
-    const ans = await callGeminiChat(msg);
-    chatH.push({ r: 'a', t: ans });
+async function doChat(){
+  if(isProcessing)return;
+  const inp=document.getElementById('chat-inp');
+  const msg=inp.value.trim();if(!msg)return;
+  inp.value='';
+  addMsg(msg,'user');
+  chatH.push({r:'u',t:msg});
+  isProcessing=true;setStatus('proc');
+  if(window.innerWidth<700)switchTab('ai');
+  try{
+    const ans=await callGeminiChat(msg);
+    const refMatch=ans.match(/\[ref:(\d+)\]/);
+    if(refMatch)hlSent(parseInt(refMatch[1]));
+    const clean=ans.replace(/\[ref:\d+\]/g,'').trim();
+    addMsg(clean,'bot');
+    chatH.push({r:'a',t:clean});
     saveCur();
-  } catch (e) {
-    addMsg('حدث خطأ: ' + e.message, 'bot');
+  }catch(e){
+    addMsg('خطأ: '+e.message,'bot');
   }
-  setStatus(isRec ? 'lis' : 'ready');
+  isProcessing=false;setStatus(isRec?'lis':'ready');
 }
 
-function qSend(msg) { document.getElementById('chat-inp').value = msg; doChat(); }
-
-function switchTab(tab) {
-  const tr = document.getElementById('mob-trans'), ai = document.getElementById('mob-ai');
-  const tbT = document.getElementById('tab-trans'), tbA = document.getElementById('tab-ai');
-  if (tab === 'trans') { tr.classList.add('active'); ai.classList.remove('active'); tbT.classList.add('active'); tbA.classList.remove('active'); }
-  else { ai.classList.add('active'); tr.classList.remove('active'); tbA.classList.add('active'); tbT.classList.remove('active'); }
+function qSend(msg){
+  if(isProcessing)return;
+  document.getElementById('chat-inp').value=msg;
+  doChat();
 }
 
-function toggleMic() { if (isRec) stopRec(); else startRec(); }
+function switchTab(tab){
+  const tr=document.getElementById('mob-trans'),ai=document.getElementById('mob-ai');
+  const tbT=document.getElementById('tab-trans'),tbA=document.getElementById('tab-ai');
+  if(tab==='trans'){tr.classList.add('active');ai.classList.remove('active');tbT.classList.add('active');tbA.classList.remove('active');}
+  else{ai.classList.add('active');tr.classList.remove('active');tbA.classList.add('active');tbT.classList.remove('active');}
+}
 
-function startRec() {
-  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) { alert('استخدم Chrome للتعرف على الصوت'); return; }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  rec = new SR();
-  rec.lang = cur.src || 'zh-CN';
-  rec.continuous = true;
-  rec.interimResults = true;
-  rec.onstart = () => { isRec = true; setMicUI(true); setStatus('lis'); };
-  rec.onend = () => { if (isRec) rec.start(); };
-  rec.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') setStatus('ready'); };
-  rec.onresult = (e) => {
-    let itr = '', fin = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) fin += e.results[i][0].transcript;
-      else itr += e.results[i][0].transcript;
+function toggleMic(){if(isRec)stopRec();else startRec();}
+
+function startRec(){
+  if(!('webkitSpeechRecognition'in window||'SpeechRecognition'in window)){alert('استخدم Chrome للتعرف على الصوت');return;}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  rec=new SR();rec.lang=cur.src||'zh-CN';rec.continuous=true;rec.interimResults=true;
+  rec.onstart=()=>{isRec=true;setMicUI(true);setStatus('lis');};
+  rec.onend=()=>{if(isRec)rec.start();};
+  rec.onerror=(e)=>{if(e.error!=='no-speech'&&e.error!=='aborted')setStatus('ready');};
+  rec.onresult=(e)=>{
+    let fin='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal)fin+=e.results[i][0].transcript;
     }
-    if (fin) { clearTimeout(silT); procText(fin.trim()); }
-    else if (itr) { clearTimeout(silT); silT = setTimeout(() => { if (itr.trim()) procText(itr.trim()); }, 1500); }
+    if(fin){clearTimeout(silT);procText(fin.trim());}
   };
   rec.start();
 }
 
-function stopRec() {
-  isRec = false; clearTimeout(silT);
-  if (rec) { rec.onend = null; rec.stop(); }
-  setMicUI(false); setStatus('ready');
+function stopRec(){
+  isRec=false;clearTimeout(silT);
+  if(rec){rec.onend=null;rec.stop();}
+  setMicUI(false);setStatus('ready');
 }
 
-function setMicUI(r) {
-  document.getElementById('mic-btn').className = 'mic-btn' + (r ? ' rec' : '');
-  document.getElementById('mic-tab-lbl').textContent = r ? 'إيقاف' : 'ميكروفون';
-  document.getElementById('tab-mic').style.color = r ? '#E24B4A' : 'var(--text3)';
+function setMicUI(r){
+  document.getElementById('mic-btn').className='mic-btn'+(r?' rec':'');
+  document.getElementById('mic-tab-lbl').textContent=r?'إيقاف':'ميكروفون';
+  document.getElementById('tab-mic').style.color=r?'#E24B4A':'var(--text3)';
 }
 
 renderList();
