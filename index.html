@@ -55,11 +55,12 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 .panel-hdr{padding:10px 14px;background:var(--bg4);border-bottom:1px solid var(--border2);font-size:13px;color:var(--text3);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
 .panel-hdr-badge{font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text3)}
 .trans-area{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
-.sentence{padding:10px 12px;margin-bottom:6px;border-radius:10px;font-size:15px;line-height:1.7;color:#d8d8d8;border-right:3px solid transparent;transition:background .3s,border-color .3s}
+.sentence{padding:10px 12px;margin-bottom:6px;border-radius:10px;font-size:15px;line-height:1.7;color:#d8d8d8;border-right:3px solid transparent;transition:all .3s}
+.sentence.pending{color:var(--text3);border-right-color:#333}
 .sentence.hl{background:var(--green-dim);border-right-color:var(--green);color:#fff}
+.interim-line{padding:8px 12px;margin-bottom:4px;border-radius:8px;font-size:14px;line-height:1.6;color:var(--text3);border-right:3px solid #333;font-style:italic}
 .ai-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
 .alert-bub{background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:12px;padding:10px 14px;font-size:13px;color:var(--amber);line-height:1.6}
-.alert-bub.urgent{background:var(--red-dim);border-color:var(--red-border);color:var(--red)}
 .ai-msg{padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.6;max-width:88%}
 .ai-msg.user{background:var(--green-dim);color:var(--green-light);align-self:flex-start}
 .ai-msg.bot{background:var(--bg3);color:#d8d8d8;border:1px solid var(--border);align-self:flex-end}
@@ -191,7 +192,9 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
         <span style="color:var(--text2)">الترجمة الفورية</span>
         <span class="panel-hdr-badge" id="sent-count">0 جملة</span>
       </div>
-      <div class="trans-area" id="trans-area"></div>
+      <div class="trans-area" id="trans-area">
+        <div class="interim-line" id="interim-line" style="display:none"></div>
+      </div>
       <div class="mic-wrap">
         <button class="mic-btn" id="mic-btn" onclick="toggleMic()">
           <svg viewBox="0 0 24 24" fill="white"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm7 8a1 1 0 0 1 1 1 8 8 0 0 1-7 7.94V22h-2v-2.06A8 8 0 0 1 4 12a1 1 0 0 1 2 0 6 6 0 0 0 12 0 1 1 0 0 1 1-1z"/></svg>
@@ -254,18 +257,18 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 
 </div>
 <script>
-const GEMINI_MODEL='gemini-2.0-flash';
+const GEMINI_MODEL='gemini-2.0-flash-lite';
 const MS_KEY='4353846f-9d93-4f0a-a152-59d45da0e588';
 const MS_REGION='eastasia';
 
-let sessions=JSON.parse(localStorage.getItem('lm8_sess')||'[]');
-let cur=null,rec=null,isRec=false,silT=null,sCount=0,chatH=[],sentences=[];
+let sessions=JSON.parse(localStorage.getItem('lm9_sess')||'[]');
+let cur=null,rec=null,isRec=false,sCount=0,chatH=[],sentences=[];
 
 function gotoPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pg-'+id).classList.add('active');
   if(id==='home')renderList();
-  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm8_gk')||'';
+  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm9_gk')||'';
 }
 
 function renderList(){
@@ -298,40 +301,43 @@ function openSess(id){
   cur=sessions.find(s=>s.id===id);if(!cur)return;
   document.getElementById('sess-title').textContent=cur.name;
   sCount=0;chatH=[...(cur.chatH||[])];sentences=[...(cur.sentences||[])];
-  document.getElementById('trans-area').innerHTML='';
+  document.getElementById('trans-area').innerHTML='<div class="interim-line" id="interim-line" style="display:none"></div>';
   document.getElementById('ai-area').innerHTML='';
-  sentences.forEach(s=>addLine(s.orig,s.tr,s.id,false));
+  sentences.forEach(s=>addLine(s.tr,s.id,false));
   (cur.chatH||[]).forEach(m=>{if(m.r==='u')addMsg(m.t,'user',false);else addMsg(m.t,'bot',false);});
   sCount=sentences.length;updCount();switchTab('trans');gotoPage('session');
 }
 
 function exitSess(){if(isRec)stopRec();saveCur();gotoPage('home');}
-function save(){localStorage.setItem('lm8_sess',JSON.stringify(sessions));}
+function save(){localStorage.setItem('lm9_sess',JSON.stringify(sessions));}
 function saveCur(){if(!cur)return;cur.sentences=sentences;cur.chatH=chatH;const i=sessions.findIndex(s=>s.id===cur.id);if(i>=0)sessions[i]=cur;save();}
-function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm8_gk',v);alert('تم الحفظ ✓');gotoPage('home');}
-function getGK(){return localStorage.getItem('lm8_gk')||'';}
+function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm9_gk',v);alert('تم الحفظ ✓');gotoPage('home');}
+function getGK(){return localStorage.getItem('lm9_gk')||'';}
 function clearAll(){if(confirm('حذف جميع البيانات؟')){localStorage.clear();sessions=[];gotoPage('home');}}
 
-function getLangCode(code){
-  const m={'zh-CN':'zh-Hans','zh':'zh-Hans','ar':'ar','en-US':'en','en':'en','fr-FR':'fr','fr':'fr','de-DE':'de','de':'de','ja-JP':'ja','ko-KR':'ko','ru-RU':'ru','ru':'ru','tr-TR':'tr','tr':'tr'};
+function getMSTgtCode(code){
+  const m={ar:'ar','en-US':'en','en':'en','fr-FR':'fr','fr':'fr','de-DE':'de','de':'de','ja-JP':'ja','ko-KR':'ko','ru-RU':'ru','ru':'ru','tr-TR':'tr','tr':'tr','zh-Hans':'zh-Hans','zh':'zh-Hans'};
   return m[code]||code;
 }
 
 async function translateMS(text,toLang){
-  const to=getLangCode(toLang);
-  const url='https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to='+to;
-  const res=await fetch(url,{
+  const to=getMSTgtCode(toLang);
+  const res=await fetch('https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to='+to,{
     method:'POST',
     headers:{
       'Content-Type':'application/json',
       'Ocp-Apim-Subscription-Key':MS_KEY,
       'Ocp-Apim-Subscription-Region':MS_REGION
     },
-    body:JSON.stringify([{text}])
+    body:JSON.stringify([{Text:text}])
   });
-  if(!res.ok)throw new Error('MS: '+res.status);
+  if(!res.ok){
+    const err=await res.text();
+    console.error('MS Error:',res.status,err);
+    throw new Error('MS:'+res.status);
+  }
   const data=await res.json();
-  return data[0]?.translations[0]?.text||text;
+  return data[0]?.translations?.[0]?.text||text;
 }
 
 function sysPromChat(){
@@ -343,21 +349,13 @@ function sysPromChat(){
 function sysPromAlert(){
   const al=cur.alerts.join('،');
   const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
-  return 'أنت مساعد ذكي.'+ct+'\nراقب النص التالي وإذا وجدت ما يخص ('+al+') أعطِ تنبيهاً قصيراً بجملة واحدة فقط.\nإذا لا يوجد شيء مهم اكتب فقط: NONE\nلا تترجم — فقط نبّه إذا وجد شيء مهم.';
+  return 'أنت مساعد.'+ct+'\nإذا وجد في النص ما يخص ('+al+') أعطِ تنبيهاً قصيراً بجملة واحدة فقط بالعربية.\nإذا لا يوجد شيء مهم اكتب: NONE';
 }
 
 async function callGemini(prompt,maxTokens){
-  const key=getGK();
-  if(!key)return '';
+  const key=getGK();if(!key)return '';
   const url='https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent?key='+key;
-  const res=await fetch(url,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      contents:[{role:'user',parts:[{text:prompt}]}],
-      generationConfig:{temperature:0.2,maxOutputTokens:maxTokens||150}
-    })
-  });
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.2,maxOutputTokens:maxTokens||150}})});
   if(!res.ok)return '';
   const data=await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
@@ -368,27 +366,30 @@ async function callGeminiChat(msg){
   if(!key){addMsg('يرجى إضافة مفتاح جيميناي في الإعدادات','bot');return '';}
   const url='https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent?key='+key;
   const hist=chatH.slice(-4).map(m=>({role:m.r==='u'?'user':'model',parts:[{text:m.t}]}));
-  const messages=[
-    {role:'user',parts:[{text:sysPromChat()}]},
-    {role:'model',parts:[{text:'فهمت، أنا جاهز.'}]},
-    ...hist,
-    {role:'user',parts:[{text:msg}]}
-  ];
-  const res=await fetch(url,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:messages,generationConfig:{temperature:0.3,maxOutputTokens:400}})
-  });
+  const messages=[{role:'user',parts:[{text:sysPromChat()}]},{role:'model',parts:[{text:'فهمت.'}]},...hist,{role:'user',parts:[{text:msg}]}];
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:messages,generationConfig:{temperature:0.3,maxOutputTokens:400}})});
   if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||res.status);}
   const data=await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
 
-function addLine(orig,tr,id,scroll=true){
-  const el=document.getElementById('trans-area');
+function showInterim(text){
+  const el=document.getElementById('interim-line');
+  if(!el)return;
+  if(text){el.textContent=text;el.style.display='block';}
+  else{el.style.display='none';el.textContent='';}
+  const area=document.getElementById('trans-area');
+  area.scrollTop=area.scrollHeight;
+}
+
+function addLine(tr,id,scroll=true){
+  const area=document.getElementById('trans-area');
+  const interim=document.getElementById('interim-line');
   const d=document.createElement('div');
-  d.className='sentence';d.id='s'+id;d.textContent=tr||orig;
-  el.appendChild(d);if(scroll)el.scrollTop=el.scrollHeight;return d;
+  d.className='sentence';d.id='s'+id;d.textContent=tr;
+  area.insertBefore(d,interim);
+  if(scroll)area.scrollTop=area.scrollHeight;
+  return d;
 }
 
 function hlSent(id){
@@ -401,7 +402,7 @@ function addMsg(text,role,scroll=true){
   const el=document.getElementById('ai-area');
   const d=document.createElement('div');
   d.className='ai-msg '+role;d.textContent=text;el.appendChild(d);
-  if(scroll)el.scrollTop=el.scrollHeight;return d;
+  if(scroll)el.scrollTop=el.scrollHeight;
 }
 
 function addAlert(text){
@@ -423,17 +424,20 @@ function setStatus(s){
 async function procText(text){
   if(!text||text.trim().length<2)return;
   const id=++sCount;
-  const sentEl=addLine(text,'...',id);
-  updCount();setStatus('proc');
+  showInterim('');
+  setStatus('proc');
   try{
     const translation=await translateMS(text,cur.tgt);
-    sentEl.textContent=translation;
+    addLine(translation,id,true);
     sentences.push({id,orig:text,tr:translation});
+    updCount();
     saveCur();
     checkAlertAsync(text);
   }catch(e){
-    sentEl.textContent=text;
+    addLine(text,id,true);
     sentences.push({id,orig:text,tr:text});
+    updCount();
+    console.error('Translation error:',e);
   }
   setStatus('lis');
 }
@@ -485,23 +489,26 @@ function startRec(){
   rec=new SR();
   rec.lang=cur.src||'zh-CN';
   rec.continuous=true;
-  rec.interimResults=false;
+  rec.interimResults=true;
   rec.onstart=()=>{isRec=true;setMicUI(true);setStatus('lis');};
   rec.onend=()=>{if(isRec)rec.start();};
   rec.onerror=(e)=>{if(e.error!=='no-speech'&&e.error!=='aborted')setStatus('ready');};
   rec.onresult=(e)=>{
-    let fin='';
+    let interim='',final='';
     for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal)fin+=e.results[i][0].transcript;
+      if(e.results[i].isFinal)final+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
     }
-    if(fin.trim())procText(fin.trim());
+    if(interim)showInterim(interim);
+    if(final){showInterim('');procText(final.trim());}
   };
   rec.start();
 }
 
 function stopRec(){
-  isRec=false;clearTimeout(silT);
+  isRec=false;
   if(rec){rec.onend=null;rec.stop();}
+  showInterim('');
   setMicUI(false);setStatus('ready');
 }
 
