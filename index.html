@@ -1,6 +1,4 @@
-ممتاز! عندي كل شيء الآن. إليك الكود الكامل المعدّل:
 
-```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -256,18 +254,18 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 
 </div>
 <script>
-const GEMINI_MODEL='gemini-2.5-flash';
+const GEMINI_MODEL='gemini-2.0-flash';
 const MS_KEY='4353846f-9d93-4f0a-a152-59d45da0e588';
 const MS_REGION='eastasia';
 
-let sessions=JSON.parse(localStorage.getItem('lm7_sess')||'[]');
-let cur=null,rec=null,isRec=false,silT=null,sCount=0,chatH=[],sentences=[],aiQueue=[];
+let sessions=JSON.parse(localStorage.getItem('lm8_sess')||'[]');
+let cur=null,rec=null,isRec=false,silT=null,sCount=0,chatH=[],sentences=[];
 
 function gotoPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pg-'+id).classList.add('active');
   if(id==='home')renderList();
-  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm7_gk')||'';
+  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm8_gk')||'';
 }
 
 function renderList(){
@@ -308,10 +306,10 @@ function openSess(id){
 }
 
 function exitSess(){if(isRec)stopRec();saveCur();gotoPage('home');}
-function save(){localStorage.setItem('lm7_sess',JSON.stringify(sessions));}
+function save(){localStorage.setItem('lm8_sess',JSON.stringify(sessions));}
 function saveCur(){if(!cur)return;cur.sentences=sentences;cur.chatH=chatH;const i=sessions.findIndex(s=>s.id===cur.id);if(i>=0)sessions[i]=cur;save();}
-function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm7_gk',v);alert('تم الحفظ ✓');gotoPage('home');}
-function getGK(){return localStorage.getItem('lm7_gk')||'';}
+function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm8_gk',v);alert('تم الحفظ ✓');gotoPage('home');}
+function getGK(){return localStorage.getItem('lm8_gk')||'';}
 function clearAll(){if(confirm('حذف جميع البيانات؟')){localStorage.clear();sessions=[];gotoPage('home');}}
 
 function getLangCode(code){
@@ -319,10 +317,9 @@ function getLangCode(code){
   return m[code]||code;
 }
 
-async function translateMS(text,fromLang,toLang){
-  const from=getLangCode(fromLang);
+async function translateMS(text,toLang){
   const to=getLangCode(toLang);
-  const url='https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from='+from+'&to='+to;
+  const url='https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to='+to;
   const res=await fetch(url,{
     method:'POST',
     headers:{
@@ -332,7 +329,7 @@ async function translateMS(text,fromLang,toLang){
     },
     body:JSON.stringify([{text}])
   });
-  if(!res.ok)throw new Error('MS Translator: '+res.status);
+  if(!res.ok)throw new Error('MS: '+res.status);
   const data=await res.json();
   return data[0]?.translations[0]?.text||text;
 }
@@ -346,7 +343,7 @@ function sysPromChat(){
 function sysPromAlert(){
   const al=cur.alerts.join('،');
   const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
-  return 'أنت مساعد ذكي.'+ct+'\nراقب النص التالي وإذا وجدت ما يخص ('+al+') أعطِ تنبيهاً قصيراً جداً بجملة واحدة فقط.\nإذا لا يوجد شيء مهم اكتب فقط: NONE\nلا تترجم — فقط نبّه إذا وجد شيء مهم.';
+  return 'أنت مساعد ذكي.'+ct+'\nراقب النص التالي وإذا وجدت ما يخص ('+al+') أعطِ تنبيهاً قصيراً بجملة واحدة فقط.\nإذا لا يوجد شيء مهم اكتب فقط: NONE\nلا تترجم — فقط نبّه إذا وجد شيء مهم.';
 }
 
 async function callGemini(prompt,maxTokens){
@@ -407,10 +404,10 @@ function addMsg(text,role,scroll=true){
   if(scroll)el.scrollTop=el.scrollHeight;return d;
 }
 
-function addAlert(text,urgent=false){
+function addAlert(text){
   const el=document.getElementById('ai-area');
   const d=document.createElement('div');
-  d.className='alert-bub'+(urgent?' urgent':'');d.textContent='⚠ '+text;
+  d.className='alert-bub';d.textContent='⚠ '+text;
   el.appendChild(d);el.scrollTop=el.scrollHeight;
 }
 
@@ -428,13 +425,12 @@ async function procText(text){
   const id=++sCount;
   const sentEl=addLine(text,'...',id);
   updCount();setStatus('proc');
-
   try{
-    const translation=await translateMS(text,cur.src,cur.tgt);
+    const translation=await translateMS(text,cur.tgt);
     sentEl.textContent=translation;
     sentences.push({id,orig:text,tr:translation});
     saveCur();
-    checkAlertAsync(text,id);
+    checkAlertAsync(text);
   }catch(e){
     sentEl.textContent=text;
     sentences.push({id,orig:text,tr:text});
@@ -442,7 +438,7 @@ async function procText(text){
   setStatus('lis');
 }
 
-async function checkAlertAsync(text,id){
+async function checkAlertAsync(text){
   if(!getGK())return;
   try{
     const result=await callGemini(sysPromAlert()+'\n\nالنص: "'+text+'"',100);
@@ -486,7 +482,10 @@ function toggleMic(){if(isRec)stopRec();else startRec();}
 function startRec(){
   if(!('webkitSpeechRecognition'in window||'SpeechRecognition'in window)){alert('استخدم Chrome للتعرف على الصوت');return;}
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  rec=new SR();rec.lang=cur.src||'zh-CN';rec.continuous=true;rec.interimResults=true;
+  rec=new SR();
+  rec.lang=cur.src||'zh-CN';
+  rec.continuous=true;
+  rec.interimResults=false;
   rec.onstart=()=>{isRec=true;setMicUI(true);setStatus('lis');};
   rec.onend=()=>{if(isRec)rec.start();};
   rec.onerror=(e)=>{if(e.error!=='no-speech'&&e.error!=='aborted')setStatus('ready');};
@@ -495,7 +494,7 @@ function startRec(){
     for(let i=e.resultIndex;i<e.results.length;i++){
       if(e.results[i].isFinal)fin+=e.results[i][0].transcript;
     }
-    if(fin){clearTimeout(silT);procText(fin.trim());}
+    if(fin.trim())procText(fin.trim());
   };
   rec.start();
 }
