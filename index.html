@@ -56,7 +56,6 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 .panel-hdr-badge{font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text3)}
 .trans-area{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
 .sentence{padding:10px 12px;margin-bottom:6px;border-radius:10px;font-size:15px;line-height:1.7;color:#d8d8d8;border-right:3px solid transparent;transition:all .3s}
-.sentence.pending{color:var(--text3);border-right-color:#333}
 .sentence.hl{background:var(--green-dim);border-right-color:var(--green);color:#fff}
 .interim-line{padding:8px 12px;margin-bottom:4px;border-radius:8px;font-size:14px;line-height:1.6;color:var(--text3);border-right:3px solid #333;font-style:italic}
 .ai-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
@@ -257,18 +256,17 @@ html,body{height:100%;height:-webkit-fill-available;background:var(--bg);color:v
 
 </div>
 <script>
-const GEMINI_MODEL='gemini-2.0-flash-lite';
 const MS_KEY='4353846f-9d93-4f0a-a152-59d45da0e588';
 const MS_REGION='eastasia';
 
-let sessions=JSON.parse(localStorage.getItem('lm9_sess')||'[]');
+let sessions=JSON.parse(localStorage.getItem('lm10_sess')||'[]');
 let cur=null,rec=null,isRec=false,sCount=0,chatH=[],sentences=[];
 
 function gotoPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pg-'+id).classList.add('active');
   if(id==='home')renderList();
-  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm9_gk')||'';
+  if(id==='settings')document.getElementById('g-key').value=localStorage.getItem('lm10_gk')||'';
 }
 
 function renderList(){
@@ -303,25 +301,25 @@ function openSess(id){
   sCount=0;chatH=[...(cur.chatH||[])];sentences=[...(cur.sentences||[])];
   document.getElementById('trans-area').innerHTML='<div class="interim-line" id="interim-line" style="display:none"></div>';
   document.getElementById('ai-area').innerHTML='';
-  sentences.forEach(s=>addLine(s.tr,s.id,false));
+  sentences.forEach(s=>addLine(s.orig,s.tr,s.id,false));
   (cur.chatH||[]).forEach(m=>{if(m.r==='u')addMsg(m.t,'user',false);else addMsg(m.t,'bot',false);});
   sCount=sentences.length;updCount();switchTab('trans');gotoPage('session');
 }
 
 function exitSess(){if(isRec)stopRec();saveCur();gotoPage('home');}
-function save(){localStorage.setItem('lm9_sess',JSON.stringify(sessions));}
+function save(){localStorage.setItem('lm10_sess',JSON.stringify(sessions));}
 function saveCur(){if(!cur)return;cur.sentences=sentences;cur.chatH=chatH;const i=sessions.findIndex(s=>s.id===cur.id);if(i>=0)sessions[i]=cur;save();}
-function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm9_gk',v);alert('تم الحفظ ✓');gotoPage('home');}
-function getGK(){return localStorage.getItem('lm9_gk')||'';}
+function saveSet(){const v=document.getElementById('g-key').value.trim();if(v)localStorage.setItem('lm10_gk',v);alert('تم الحفظ ✓');gotoPage('home');}
+function getGK(){return localStorage.getItem('lm10_gk')||'';}
 function clearAll(){if(confirm('حذف جميع البيانات؟')){localStorage.clear();sessions=[];gotoPage('home');}}
 
-function getMSTgtCode(code){
+function getMSTgt(code){
   const m={ar:'ar','en-US':'en','en':'en','fr-FR':'fr','fr':'fr','de-DE':'de','de':'de','ja-JP':'ja','ko-KR':'ko','ru-RU':'ru','ru':'ru','tr-TR':'tr','tr':'tr','zh-Hans':'zh-Hans','zh':'zh-Hans'};
   return m[code]||code;
 }
 
 async function translateMS(text,toLang){
-  const to=getMSTgtCode(toLang);
+  const to=getMSTgt(toLang);
   const res=await fetch('https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to='+to,{
     method:'POST',
     headers:{
@@ -331,46 +329,9 @@ async function translateMS(text,toLang){
     },
     body:JSON.stringify([{Text:text}])
   });
-  if(!res.ok){
-    const err=await res.text();
-    console.error('MS Error:',res.status,err);
-    throw new Error('MS:'+res.status);
-  }
+  if(!res.ok)throw new Error('MS:'+res.status);
   const data=await res.json();
   return data[0]?.translations?.[0]?.text||text;
-}
-
-function sysPromChat(){
-  const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
-  const context=sentences.slice(-15).map(s=>'['+s.id+'] '+s.orig).join('\n');
-  return 'أنت مساعد ذكي.'+ct+'\n\nنص الجلسة:\n'+context+'\n\nأجب من نص الجلسة فقط. إذا كان السؤال خارجها قل: هذا خارج نطاق جلستك. ردودك بالعربية. إذا أجبت من جملة اذكر رقمها [ref:رقم]';
-}
-
-function sysPromAlert(){
-  const al=cur.alerts.join('،');
-  const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
-  return 'أنت مساعد.'+ct+'\nإذا وجد في النص ما يخص ('+al+') أعطِ تنبيهاً قصيراً بجملة واحدة فقط بالعربية.\nإذا لا يوجد شيء مهم اكتب: NONE';
-}
-
-async function callGemini(prompt,maxTokens){
-  const key=getGK();if(!key)return '';
-  const url='https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent?key='+key;
-  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.2,maxOutputTokens:maxTokens||150}})});
-  if(!res.ok)return '';
-  const data=await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
-}
-
-async function callGeminiChat(msg){
-  const key=getGK();
-  if(!key){addMsg('يرجى إضافة مفتاح جيميناي في الإعدادات','bot');return '';}
-  const url='https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent?key='+key;
-  const hist=chatH.slice(-4).map(m=>({role:m.r==='u'?'user':'model',parts:[{text:m.t}]}));
-  const messages=[{role:'user',parts:[{text:sysPromChat()}]},{role:'model',parts:[{text:'فهمت.'}]},...hist,{role:'user',parts:[{text:msg}]}];
-  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:messages,generationConfig:{temperature:0.3,maxOutputTokens:400}})});
-  if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||res.status);}
-  const data=await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
 
 function showInterim(text){
@@ -382,14 +343,20 @@ function showInterim(text){
   area.scrollTop=area.scrollHeight;
 }
 
-function addLine(tr,id,scroll=true){
+function addLine(orig,tr,id,scroll=true){
   const area=document.getElementById('trans-area');
   const interim=document.getElementById('interim-line');
   const d=document.createElement('div');
-  d.className='sentence';d.id='s'+id;d.textContent=tr;
+  d.className='sentence';d.id='s'+id;
+  d.textContent=orig;
   area.insertBefore(d,interim);
   if(scroll)area.scrollTop=area.scrollHeight;
   return d;
+}
+
+function updateLine(id,tr){
+  const el=document.getElementById('s'+id);
+  if(el)el.textContent=tr;
 }
 
 function hlSent(id){
@@ -415,42 +382,28 @@ function addAlert(text){
 function updCount(){document.getElementById('sent-count').textContent=sCount+' جملة';}
 
 function setStatus(s){
-  const dot=document.getElementById('sdot'),txt=document.getElementById('stxt'),ai=document.getElementById('ai-dot');
+  const dot=document.getElementById('sdot'),txt=document.getElementById('stxt');
   if(s==='lis'){dot.className='sdot lis';txt.textContent='يستمع...';}
-  else if(s==='proc'){dot.className='sdot';txt.textContent='يترجم...';ai.className='sdot on';}
-  else{dot.className='sdot';txt.textContent='جاهز';ai.className='sdot';}
+  else if(s==='tr'){dot.className='sdot on';txt.textContent='يترجم...';}
+  else{dot.className='sdot';txt.textContent='جاهز';}
 }
 
 async function procText(text){
   if(!text||text.trim().length<2)return;
   const id=++sCount;
-  showInterim('');
-  setStatus('proc');
+  addLine(text,text,id,true);
+  sentences.push({id,orig:text,tr:text});
+  updCount();saveCur();
+  setStatus('tr');
   try{
-    const translation=await translateMS(text,cur.tgt);
-    addLine(translation,id,true);
-    sentences.push({id,orig:text,tr:translation});
-    updCount();
+    const tr=await translateMS(text,cur.tgt);
+    updateLine(id,tr);
+    sentences[sentences.length-1].tr=tr;
     saveCur();
-    checkAlertAsync(text);
   }catch(e){
-    addLine(text,id,true);
-    sentences.push({id,orig:text,tr:text});
-    updCount();
-    console.error('Translation error:',e);
+    console.error(e);
   }
   setStatus('lis');
-}
-
-async function checkAlertAsync(text){
-  if(!getGK())return;
-  try{
-    const result=await callGemini(sysPromAlert()+'\n\nالنص: "'+text+'"',100);
-    if(result&&result.trim()!=='NONE'&&result.trim().length>2){
-      addAlert(result.trim());
-      if(window.innerWidth<700)switchTab('ai');
-    }
-  }catch(e){}
 }
 
 async function doChat(){
@@ -460,8 +413,19 @@ async function doChat(){
   addMsg(msg,'user');
   chatH.push({r:'u',t:msg});
   if(window.innerWidth<700)switchTab('ai');
+  const key=getGK();
+  if(!key){addMsg('يرجى إضافة مفتاح جيميناي في الإعدادات','bot');return;}
   try{
-    const ans=await callGeminiChat(msg);
+    const ct=cur.ctx?'\nالسياق: '+cur.ctx:'';
+    const context=sentences.slice(-15).map(s=>'['+s.id+'] '+s.orig).join('\n');
+    const sysProm='أنت مساعد ذكي.'+ct+'\n\nنص الجلسة:\n'+context+'\n\nأجب من نص الجلسة فقط. إذا كان السؤال خارجها قل: هذا خارج نطاق جلستك. ردودك بالعربية. إذا أجبت من جملة اذكر رقمها [ref:رقم]';
+    const hist=chatH.slice(-4).map(m=>({role:m.r==='u'?'user':'model',parts:[{text:m.t}]}));
+    const messages=[{role:'user',parts:[{text:sysProm}]},{role:'model',parts:[{text:'فهمت.'}]},...hist,{role:'user',parts:[{text:msg}]}];
+    const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key;
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:messages,generationConfig:{temperature:0.3,maxOutputTokens:400}})});
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||res.status);}
+    const data=await res.json();
+    const ans=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
     if(!ans)return;
     const refMatch=ans.match(/\[ref:(\d+)\]/);
     if(refMatch)hlSent(parseInt(refMatch[1]));
